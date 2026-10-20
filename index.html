@@ -1,0 +1,1881 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Визуализатор бит БЭСМ-6 и IEEE-754</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg:#eef1f6; --panel:#fff; --panel-2:#f7f9fc; --text:#1b2330;
+  --muted:#5f6b7c; --border:#d4dbe5; --accent:#2f6fed; --accent-fg:#fff;
+  --danger:#c0392b; --shadow:0 1px 3px rgba(20,30,50,.13);
+  --k-sign-bg:#ffd8d8;--k-sign-fg:#8b1a1a;
+  --k-exponent-bg:#ffe6ad;--k-exponent-fg:#6d4a00;
+  --k-fraction-bg:#cfe6ff;--k-fraction-fg:#0f4571;
+  --k-register-bg:#d0f0d4;--k-register-fg:#155c22;
+  --k-format-bg:#e3d7ff;--k-format-fg:#432a7a;
+  --k-opcode-bg:#f2d3ff;--k-opcode-fg:#5c1a7a;
+  --k-address-bg:#dee4ec;--k-address-fg:#2f3947;
+  --k-value-bg:#e4e9f0;--k-value-fg:#2f3947;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#0e1219;--panel:#161d27;--panel-2:#1c2531;--text:#e6ecf5;
+  --muted:#93a1b5;--border:#2a3546;--accent:#4f8cff;--accent-fg:#0b1119;
+  --danger:#ff6b6b;--shadow:0 1px 3px rgba(0,0,0,.5);
+  --k-sign-bg:#4a1f24;--k-sign-fg:#ffb3b8;
+  --k-exponent-bg:#4a3a12;--k-exponent-fg:#ffd77a;
+  --k-fraction-bg:#16334f;--k-fraction-fg:#8ecbff;
+  --k-register-bg:#143a1e;--k-register-fg:#8fe6a4;
+  --k-format-bg:#2d2350;--k-format-fg:#c6b0ff;
+  --k-opcode-bg:#3d1d4d;--k-opcode-fg:#e5a9ff;
+  --k-address-bg:#232c3a;--k-address-fg:#b6c3d6;
+  --k-value-bg:#222b39;--k-value-fg:#b6c3d6;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:0 0 2rem;background:var(--bg);color:var(--text);
+  font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.45;
+  transition:background .18s,color .18s}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.7rem 1.1rem;background:var(--panel);border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow);position:sticky;top:0;z-index:10;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:.7rem}
+.logo{font-weight:800;letter-spacing:.04em;font-size:1.05rem;color:var(--accent);
+  border:2px solid var(--accent);border-radius:7px;padding:.1rem .5rem}
+.brand h1{font-size:1.05rem;margin:0;font-weight:600}
+.theme-btn{font:inherit;padding:.4rem .8rem;border-radius:8px;
+  border:1px solid var(--border);background:var(--panel-2);color:var(--text);cursor:pointer}
+.theme-btn:hover{border-color:var(--accent)}
+.tabs{display:flex;flex-wrap:wrap;gap:.35rem;padding:.65rem 1.1rem 0}
+.tab{font:inherit;padding:.42rem .9rem;border:1px solid var(--border);border-bottom:none;
+  border-radius:9px 9px 0 0;background:var(--panel-2);color:var(--muted);cursor:pointer}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--panel);color:var(--text);font-weight:600;
+  box-shadow:inset 0 3px 0 0 var(--accent)}
+.content{display:flex;flex-direction:column;gap:1rem;padding:1rem 1.1rem 0}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--shadow);padding:.85rem .95rem 1rem}
+.panel.hidden{display:none}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+  margin-bottom:.7rem;flex-wrap:wrap}
+.panel-head h2{font-size:.95rem;margin:0;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted)}
+.hint{text-transform:none;letter-spacing:0;font-weight:400;font-size:.82rem;color:var(--muted)}
+
+.bit-scroll{overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+.bit-scroll::-webkit-scrollbar{height:9px}
+.bit-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+.bit-grid{display:inline-grid;gap:3px;align-items:stretch}
+
+.field-label{font-size:.68rem;font-weight:700;text-align:center;padding:3px 3px;
+  border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  letter-spacing:0;cursor:default;transition:filter .1s}
+.field-label.hl{filter:brightness(1.2);box-shadow:0 0 0 2px currentColor}
+
+.bit-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2px 0 2px;border-radius:5px;border:1px solid transparent;font:inherit;
+  cursor:pointer;transition:filter .1s,box-shadow .1s,transform .05s;
+  --bc:var(--k-value-fg);--bb:var(--k-value-bg);background:var(--bb);color:var(--bc);
+  border-color:color-mix(in srgb,var(--bc) 35%,transparent);
+  min-width:0;overflow:hidden}
+.bit-cell:hover{filter:brightness(1.12)}
+.bit-cell:active{transform:translateY(1px)}
+.bit-cell.hl{box-shadow:0 0 0 2px var(--bc)}
+.bit-cell .v{font-size:.85rem;font-weight:500;line-height:1;opacity:.45;
+  font-variant-numeric:tabular-nums;pointer-events:none}
+.bit-cell .i{font-size:.56rem;line-height:1;opacity:.65;margin-top:2px;
+  font-variant-numeric:tabular-nums;pointer-events:none;
+  max-width:100%;overflow:hidden;white-space:nowrap}
+.bit-cell.on{border-color:var(--bc);box-shadow:inset 0 -3px 0 0 var(--bc)}
+.bit-cell.on.hl{box-shadow:inset 0 -3px 0 0 var(--bc),0 0 0 2px var(--bc)}
+.bit-cell.on .v{font-weight:900;opacity:1}
+.bit-cell.on .i{opacity:.9}
+
+.k-sign{--bc:var(--k-sign-fg);--bb:var(--k-sign-bg)}
+.k-exponent{--bc:var(--k-exponent-fg);--bb:var(--k-exponent-bg)}
+.k-fraction{--bc:var(--k-fraction-fg);--bb:var(--k-fraction-bg)}
+.k-register{--bc:var(--k-register-fg);--bb:var(--k-register-bg)}
+.k-format{--bc:var(--k-format-fg);--bb:var(--k-format-bg)}
+.k-opcode{--bc:var(--k-opcode-fg);--bb:var(--k-opcode-bg)}
+.k-address{--bc:var(--k-address-fg);--bb:var(--k-address-bg)}
+.k-value{--bc:var(--k-value-fg);--bb:var(--k-value-bg)}
+
+.legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;margin-top:.7rem;
+  padding-top:.5rem;border-top:1px dashed var(--border);font-size:.72rem}
+.legend-item{display:inline-flex;align-items:center;gap:.32rem;color:var(--muted)}
+.legend-swatch{width:.8rem;height:.8rem;border-radius:3px;
+  border:1px solid rgba(128,128,128,.35)}
+.bits-note{font-size:.72rem;color:var(--muted);margin-top:.4rem;font-style:italic}
+
+.controls{display:flex;flex-wrap:wrap;gap:.7rem 1.1rem;align-items:flex-end;
+  padding-bottom:.8rem;border-bottom:1px dashed var(--border);margin-bottom:.8rem}
+.control-group{display:flex;flex-direction:column;gap:.25rem}
+.control-group.hidden{display:none}
+.control-group>label{font-size:.74rem;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted)}
+select,input[type="text"]{font:inherit;padding:.34rem .5rem;border-radius:7px;
+  border:1px solid var(--border);background:var(--panel-2);color:var(--text);min-width:10rem}
+select:focus,input[type="text"]:focus,button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:1px}
+.radio-row{display:flex;gap:.9rem;align-items:center;flex-wrap:wrap}
+.radio-row label{display:inline-flex;align-items:center;gap:.3rem;font-size:.86rem;
+  cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)}
+button{font:inherit;padding:.38rem .8rem;border-radius:8px;border:1px solid var(--border);
+  background:var(--panel-2);color:var(--text);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);
+  font-weight:600;padding:.5rem 1.2rem}
+button.primary:hover{filter:brightness(1.08)}
+.bit-actions{display:flex;gap:.4rem}
+.bit-actions button{padding:.25rem .6rem;font-size:.8rem}
+.actions{margin-top:.9rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.result-card{display:grid;gap:.45rem}
+.result-line{display:grid;grid-template-columns:minmax(9rem,auto) 1fr;gap:.6rem;
+  padding:.4rem .6rem;border-radius:8px;background:var(--panel-2);
+  border:1px solid var(--border);align-items:baseline}
+.result-line .k{font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--muted)}
+.result-line .v{font-family:"Cascadia Mono",Consolas,monospace;font-size:.9rem;
+  word-break:break-all}
+.result-line.big .v{font-size:1.15rem;font-weight:700;color:var(--accent)}
+.result-empty{color:var(--muted);font-style:italic;padding:.5rem 0}
+.result-error{color:var(--danger);font-weight:600;padding:.55rem .7rem;
+  border:1px solid var(--danger);border-radius:8px;
+  background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.formula-block{margin-top:.3rem;border:1px solid var(--border);
+  border-left:4px solid var(--accent);border-radius:9px;background:var(--panel-2);
+  padding:.55rem .8rem .65rem}
+.formula-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);margin-bottom:.35rem;font-weight:700}
+.formula{font-family:"Cascadia Mono",Consolas,monospace;font-size:.9rem;
+  line-height:1.6;color:var(--text);word-break:break-word}
+.formula .sub{font-size:.7em;vertical-align:sub}
+.formula .sup{font-size:.7em;vertical-align:super}
+.formula .op{color:var(--accent);font-weight:700}
+.formula .num{display:inline-block;padding:0 .3rem;border-radius:4px;
+  background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.journal{display:flex;flex-direction:column;gap:.7rem;max-height:42vh;
+  overflow-y:auto;padding-right:.3rem}
+.journal:empty::after{content:"Журнал пуст. Нажмите «Декодировать», чтобы добавить отчёт.";
+  color:var(--muted);font-style:italic;font-size:.88rem}
+.journal-entry{border:1px solid var(--border);border-left:4px solid var(--accent);
+  border-radius:9px;background:var(--panel-2);padding:.55rem .75rem;font-size:.86rem}
+.journal-entry.error{border-left-color:var(--danger)}
+.journal-entry header{display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap;
+  margin-bottom:.35rem}
+.j-time{font-size:.74rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.j-op{font-weight:700}
+.j-input{color:var(--muted);font-size:.82rem;margin-bottom:.3rem}
+.j-input code{font-family:"Cascadia Mono",Consolas,monospace;color:var(--text);
+  word-break:break-all}
+.j-steps{margin:.3rem 0 .35rem 1.2rem;padding:0;display:grid;gap:.18rem;
+  color:var(--muted)}
+.j-steps li::marker{color:var(--accent);font-weight:700}
+.j-result{border-top:1px dashed var(--border);padding-top:.3rem;margin-top:.3rem}
+.j-result strong{font-family:"Cascadia Mono",Consolas,monospace;color:var(--accent);
+  word-break:break-all}
+
+/* ============================ Регистры ============================ */
+.registers-view{display:flex;flex-direction:column;gap:1rem}
+.reg-section{padding-bottom:.85rem;border-bottom:1px dashed var(--border)}
+.reg-section:last-child{border-bottom:none;padding-bottom:0}
+.reg-section h3{margin:0 0 .5rem;font-size:.78rem;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted);font-weight:700}
+.reg-section h3 .hint{font-size:.7rem;text-transform:none;letter-spacing:0;font-weight:400}
+.reg-line{display:flex;align-items:center;gap:.6rem;padding:.28rem 0;
+  overflow-x:auto;scrollbar-width:thin}
+.reg-line::-webkit-scrollbar{height:7px}
+.reg-line::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.reg-label{min-width:2.6rem;font-family:"Cascadia Mono",Consolas,monospace;
+  font-weight:700;color:var(--accent);font-size:.95rem;text-align:right;
+  line-height:1.1;flex-shrink:0}
+.reg-label small{color:var(--muted);font-size:.65rem;font-weight:500;
+  font-family:inherit;display:block;line-height:1}
+.reg-bits{display:flex;gap:1px;flex-wrap:nowrap;flex-shrink:0;--rbs:16px}
+.reg-bits.sz-48{--rbs:14px}
+.reg-bits.sz-15{--rbs:22px}
+.reg-bits.sz-6 {--rbs:32px}
+.reg-bit{width:var(--rbs);height:calc(var(--rbs) + 4px);
+  border:1px solid color-mix(in srgb,var(--bc) 38%,transparent);
+  background:var(--bb);color:var(--bc);
+  font:inherit;font-size:.72rem;font-weight:500;
+  border-radius:3px;cursor:pointer;
+  display:grid;place-items:center;padding:0;
+  --bc:var(--k-value-fg);--bb:var(--k-value-bg);
+  opacity:.55;transition:filter .1s,box-shadow .1s,opacity .1s;
+  font-variant-numeric:tabular-nums;flex-shrink:0}
+.reg-bit.sz-48-font{font-size:.62rem}
+.reg-bit:hover{filter:brightness(1.15)}
+.reg-bit:active{transform:translateY(1px)}
+.reg-bit.on{opacity:1;font-weight:900;box-shadow:inset 0 -2px 0 0 var(--bc)}
+.reg-bit:disabled{cursor:not-allowed;opacity:.35}
+.reg-bit.group-sep{margin-left:4px}
+.reg-value{font-family:"Cascadia Mono",Consolas,monospace;font-size:.82rem;
+  color:var(--muted);white-space:nowrap;flex-shrink:0;min-width:14rem}
+.reg-value strong{color:var(--accent);font-weight:700}
+.reg-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));
+  gap:.15rem .9rem}
+.reg-mgrid .reg-line{padding:.15rem 0;border:none}
+.reg-mgrid .reg-label{min-width:2.2rem;font-size:.82rem}
+.r-decode{margin-top:.55rem;display:grid;gap:.2rem;padding:.55rem .8rem;
+  border-radius:8px;background:var(--panel-2);border:1px solid var(--border);
+  font-family:"Cascadia Mono",Consolas,monospace;font-size:.82rem}
+.r-bit{display:grid;grid-template-columns:5.5rem 1fr auto;gap:.7rem;
+  align-items:baseline;padding:.12rem 0}
+.r-bit .r-pos{color:var(--muted);font-weight:600;font-size:.78rem}
+.r-bit .r-label{color:var(--text)}
+.r-bit .r-value{color:var(--muted);font-weight:600;white-space:nowrap}
+.r-bit.set .r-value{color:var(--accent);font-weight:700}
+.r-bit.set .r-pos{color:var(--accent)}
+
+/* ============================ Перфокарта ============================ */
+#punchcard-view{display:flex;flex-direction:column;gap:.7rem}
+#punchcard-view .pc-presets{display:flex;gap:.35rem;flex-wrap:wrap;
+  justify-content:center;padding:.5rem;background:var(--panel-2);
+  border:1px solid var(--border);border-radius:8px}
+#punchcard-view .pc-preset-btn{background:var(--panel);color:var(--text);
+  border:1px solid var(--border);width:38px;height:38px;border-radius:5px;
+  font-size:17px;cursor:pointer;font-family:'Courier New',monospace;
+  transition:.15s;display:flex;justify-content:center;align-items:center;padding:0}
+#punchcard-view .pc-preset-btn:hover{background:var(--accent);
+  color:var(--accent-fg);border-color:var(--accent)}
+#punchcard-view .pc-scroll{overflow:auto;padding:.5rem;background:var(--bg);
+  border:1px solid var(--border);border-radius:8px;display:flex;
+  justify-content:center;align-items:flex-start;min-height:200px}
+
+/* Фикс бага фона: жесткие размеры для оберток */
+#punchcard-view .pc-outer{flex-shrink:0;position:relative}
+#punchcard-view .pc-inner{
+  width:188.325mm;
+  height:83.55mm;
+  transform-origin:top left
+}
+#punchcard-view .card-wrapper{
+  width:188.325mm;
+  height:83.55mm;
+  box-sizing:border-box;
+  background:#9D7E61;
+  padding:0.5mm;
+  clip-path:polygon(6.35mm 0, 100% 0, 100% 100%, 0 100%, 0 6.35mm);
+  box-shadow:0 8px 24px rgba(0,0,0,0.45)
+}
+#punchcard-view .card{
+  position:relative;
+  width:187.325mm;
+  height:82.55mm;
+  background-color:#FAD7B9;
+  color:#9D7E61;
+  font-family:'Courier New', Courier, monospace;
+  clip-path:polygon(5.85mm 0, 100% 0, 100% 100%, 0 100%, 0 5.85mm);
+  box-sizing:border-box;
+  user-select:none;
+  overflow:hidden /* Фикс переполнения */
+}
+#punchcard-view .top-text{
+  position:absolute;top:1.2mm;left:7mm;
+  font-size:2.1mm;font-weight:bold;letter-spacing:0.1mm;white-space:nowrap;
+  font-family:'Courier New', Courier, monospace
+}
+#punchcard-view .grid-area{
+  position:absolute;top:3.175mm;left:4.1402mm;
+  display:grid;
+  grid-template-columns:repeat(80, 2.2098mm);
+  grid-template-rows:repeat(12, 6.35mm)
+}
+#punchcard-view .cell{
+  width:2.2098mm;height:6.35mm;position:relative;cursor:crosshair
+}
+#punchcard-view .cell span{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%, -50%);
+  font-size:1.6mm;font-weight:bold;opacity:0.6;line-height:1;pointer-events:none;
+  font-family:'Courier New', Courier, monospace
+}
+#punchcard-view .cell:hover{background-color:rgba(157, 126, 97, 0.15)}
+#punchcard-view .cell.hole span{opacity:0}
+#punchcard-view .cell.hole::after{
+  content:'';position:absolute;
+  width:1.397mm;height:3.175mm;background-color:#2b1d14;border-radius:0;
+  box-shadow:inset 0.1mm 0.1mm 0.2mm rgba(0,0,0,0.8);
+  top:50%;left:50%;transform:translate(-50%, -50%)
+}
+#punchcard-view .col-nums{
+  position:absolute;left:4.1402mm;width:176.784mm;
+  display:grid;grid-template-columns:repeat(80, 2.2098mm);
+  height:2mm;z-index:10;pointer-events:none;background-color:#FAD7B9
+}
+#punchcard-view .col-nums.top{top:15.875mm;transform:translateY(-50%)}
+#punchcard-view .col-nums.bottom{top:79.375mm;transform:translateY(-50%)}
+#punchcard-view .num-cell{
+  text-align:center;font-size:1.2mm;font-weight:bold;
+  display:flex;justify-content:center;align-items:center;
+  font-family:'Courier New', Courier, monospace
+}
+
+@media (max-width:900px){
+  .result-line{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">БЭСМ-6</span>
+    <h1>Визуализатор битовых форматов</h1>
+  </div>
+  <button id="themeToggle" class="theme-btn" type="button">🌙 Тёмная</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="besm6"     type="button">Число БЭСМ-6</button>
+  <button class="tab"        data-tab="command"   type="button">Команда БЭСМ-6</button>
+  <button class="tab"        data-tab="registers" type="button">Регистры БЭСМ-6</button>
+  <button class="tab"        data-tab="ieee"      type="button">IEEE-754</button>
+  <button class="tab"        data-tab="integer"   type="button">Целые числа</button>
+  <button class="tab"        data-tab="radix"     type="button">Системы счисления</button>
+  <button class="tab"        data-tab="punchcard" type="button">Перфокарта</button>
+</nav>
+
+<div class="content">
+
+  <section class="panel" id="bitsPanel">
+    <div class="panel-head">
+      <h2>Биты <span class="hint" id="bitsInfo">старший → младший</span></h2>
+      <div class="bit-actions">
+        <button type="button" id="clearBits">Сброс</button>
+        <button type="button" id="invertBits">Инверсия</button>
+      </div>
+    </div>
+    <div class="bit-scroll"><div class="bit-grid" id="bitGrid"></div></div>
+    <div class="legend" id="legend"></div>
+    <div class="bits-note" id="bitsNote"></div>
+  </section>
+
+  <section class="panel">
+    <div class="controls" id="controls">
+
+      <div class="control-group" data-tab="ieee">
+        <label for="ieeeFormat">Формат</label>
+        <select id="ieeeFormat">
+          <option value="16">binary16 (Half)</option>
+          <option value="32" selected>binary32 (float)</option>
+          <option value="64">binary64 (double)</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="integer">
+        <label for="intWidth">Разрядность</label>
+        <select id="intWidth">
+          <option value="8">8 бит</option>
+          <option value="16" selected>16 бит</option>
+          <option value="32">32 бита</option>
+          <option value="64">64 бита</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="integer">
+        <label>Интерпретация</label>
+        <div class="radio-row">
+          <label><input type="radio" name="intSign" value="signed" checked> Знаковое</label>
+          <label><input type="radio" name="intSign" value="unsigned"> Беззнаковое</label>
+        </div>
+      </div>
+
+      <div class="control-group" data-tab="command">
+        <label for="cmdSyntax">Синтаксис ассемблера</label>
+        <select id="cmdSyntax">
+          <option value="autocode" selected>Автокод (кириллица, верхний регистр)</option>
+          <option value="bemsh">БЭМШ (кириллица, нижний регистр)</option>
+          <option value="madlen">Мадлен (,OP,M ADDR,)</option>
+          <option value="b6as">b6as (латиница)</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="registers">
+        <label>Формат вывода</label>
+        <div class="radio-row">
+          <label><input type="radio" name="regFormat" value="8" checked> 8-ричный</label>
+          <label><input type="radio" name="regFormat" value="10"> 10-ричный</label>
+          <label><input type="radio" name="regFormat" value="16"> 16-ричный</label>
+        </div>
+      </div>
+
+      <div class="control-group" data-tab="registers">
+        <label>Действия</label>
+        <div class="bit-actions">
+          <button type="button" id="clearRegs">Сброс всех</button>
+        </div>
+      </div>
+
+      <div class="control-group" data-tab="radix">
+        <label for="radixInput">Число</label>
+        <input type="text" id="radixInput" value="2026" spellcheck="false">
+      </div>
+
+      <div class="control-group" data-tab="radix">
+        <label for="radixFrom">Из основания</label>
+        <select id="radixFrom">
+          <option>2</option><option>8</option><option selected>10</option><option>16</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="radix">
+        <label for="radixTo">В основание</label>
+        <select id="radixTo">
+          <option>2</option><option selected>8</option><option>10</option><option>16</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="punchcard">
+        <label for="pcText">Текст на карте</label>
+        <input type="text" id="pcText" value="⑩ ЮБЦ ДФГ A=B+3" spellcheck="false">
+      </div>
+
+      <div class="control-group" data-tab="punchcard">
+        <label for="pcFormat">Кодировка</label>
+        <select id="pcFormat">
+          <option value="row" selected>Построчный (УПП-IBM)</option>
+          <option value="column">Колоночный (IBM)</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="punchcard">
+        <label for="pcZoom">Масштаб</label>
+        <select id="pcZoom">
+          <option value="1">1.0×</option>
+          <option value="1.2">1.2×</option>
+          <option value="1.5" selected>1.5×</option>
+          <option value="1.8">1.8×</option>
+        </select>
+      </div>
+
+      <div class="control-group" data-tab="punchcard">
+        <label>Действия</label>
+        <div class="bit-actions">
+          <button type="button" id="pcClear">Очистить</button>
+          <button type="button" id="pcExportPng">PNG</button>
+          <button type="button" id="pcExportSvg">SVG</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-empty">Установите биты и нажмите «Декодировать».</div>
+    </div>
+
+    <div class="actions" id="actionsRow">
+      <button type="button" id="decodeBtn" class="primary">Декодировать</button>
+      <span class="hint" id="decodeHint">Результат обновляется автоматически при переключении битов.</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Журнал вычислений</h2>
+      <div class="bit-actions">
+        <button type="button" id="copyJournal">Копировать</button>
+        <button type="button" id="clearJournal">Очистить</button>
+      </div>
+    </div>
+    <div class="journal" id="journal"></div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  window.addEventListener('error', function (e) {
+    console.error('[BitVisualizer] Необработанная ошибка:', e.error || e.message, e);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    console.error('[BitVisualizer] Необработанный промис:', e.reason);
+  });
+  function logError(where, error, extra) {
+    console.error('[BitVisualizer] ' + where + ':',
+      error && error.message ? error.message : error, extra || '');
+  }
+  function logDebug(where, payload) {
+    console.debug('[BitVisualizer] ' + where, payload);
+  }
+
+  var IEEE_FORMATS = {
+    16: { name: 'binary16 (Half)',   expBits: 5,  fracBits: 10, bias: 15   },
+    32: { name: 'binary32 (float)',  expBits: 8,  fracBits: 23, bias: 127  },
+    64: { name: 'binary64 (double)', expBits: 11, fracBits: 52, bias: 1023 }
+  };
+
+  var F1_MNEM = {
+    autocode: ['ЗП','ЗПМ','РЕГ','СЧМ','СЛ','ВЧ','ВЧОБ','ВЧАБ',
+               'СЧ','И','НТЖ','СЛЦ','ЗНАК','ИЛИ','ДЕЛ','УМН',
+               'СБР','РЗБ','ЧЕД','НЕД','СЛП','ВЧП','СД','РЖ',
+               'СЧРЖ','СЧМР','—','УВВ','СЛПА','ВЧПА','СДА','РЖА',
+               'УИ','УИМ','СЧИ','СЧИМ','УИИ','СЛИ','СОП','Э47'],
+    bemsh:    ['зп','зпм','рег','счм','сл','вч','вчоб','вчаб',
+               'сч','и','нтж','слц','знак','или','дел','умн',
+               'сбр','рзб','чед','нед','слп','вчп','сд','рж',
+               'счрж','счмр','—','увв','слпа','вчпа','сда','ржа',
+               'уи','уим','счи','счим','уии','сли','соп','э47'],
+    b6as:     ['atx','stx','mod','xts','a+x','a-x','x-a','amx',
+               'xta','aax','aex','arx','avx','aox','a/x','a*x',
+               'apx','aux','acx','anx','e+x','e-x','asx','xtr',
+               'rte','yta','','ext','e+n','e-n','asn','ntr',
+               'ati','sti','ita','its','mtj','j+m','','']
+  };
+  var F2_MNEM = {
+    autocode: ['МОДА','МОД','УИА','СЛИА','ПО','ПЕ','ПБ','ПВ',
+               'ВЫПР','СТОП','ПИО','ПИНО','Э36','ЦИКЛ','—','—'],
+    bemsh:    ['мода','мод','уиа','слиа','по','пе','пб','пв',
+               'выпр','стоп','пио','пино','э36','цикл','—','—'],
+    b6as:     ['utc','wtc','vtm','utm','uza','u1a','uj','vjm',
+               'ij','stop','vzm','v1m','*36','vlm','','']
+  };
+  var F1_DESC = [
+    'запись аккумулятора в память', 'запись аккумулятора и извлечение из стека',
+    'изменение привилегированных регистров', 'укладка аккумулятора в стек и чтение операнда',
+    'сложение аккумулятора с операндом', 'вычитание операнда из аккумулятора',
+    'обратное вычитание', 'вычитание модулей',
+    'чтение слова в аккумулятор', 'логическое И', 'логическая неравнозначность',
+    'циклическое сложение', 'изменение знака', 'логическое ИЛИ', 'деление', 'умножение',
+    'сборка разрядов', 'разборка разрядов', 'подсчёт числа единиц', 'поиск номера единицы',
+    'сложение порядков', 'вычитание порядков', 'сдвиг по порядку операнда',
+    'установка регистра режима', 'чтение регистра режима',
+    'чтение регистра младших разрядов', 'зарезервировано',
+    'полноразрядный обмен с внешним устройством',
+    'сложение порядка с адресом', 'вычитание порядка из адреса',
+    'сдвиг по адресу', 'установка регистра режима из адреса',
+    'пересылка аккумулятора в индексный регистр',
+    'запись в индексный регистр и извлечение из стека',
+    'чтение индексного регистра в аккумулятор',
+    'укладка аккумулятора в стек и чтение индексного регистра',
+    'пересылка индексного регистра', 'сложение индексных регистров',
+    'специальное обращение к памяти', 'зарезервированная операция'
+  ];
+  var F2_DESC = [
+    'установка регистра C адресом', 'установка регистра C из памяти',
+    'установка индексного регистра адресом', 'сложение индексного регистра с адресом',
+    'переход по нулю', 'переход по единице',
+    'безусловный переход', 'переход с возвратом',
+    'возврат из прерывания', 'останов процессора',
+    'переход, если индексный регистр равен нулю',
+    'переход, если индексный регистр не равен нулю',
+    'недокументированный вариант перехода',
+    'организация цикла по индексному регистру',
+    'зарезервировано', 'зарезервировано'
+  ];
+  var SYNTAX_LABEL = { autocode:'Автокод', bemsh:'БЭМШ', madlen:'Мадлен', b6as:'b6as' };
+  var KIND_LABELS = {
+    sign:'Знак', exponent:'Порядок', fraction:'Мантисса / дробная часть',
+    register:'Индекс-регистр', format:'Формат / расширение',
+    opcode:'Код операции', address:'Адрес', value:'Разряды значения'
+  };
+
+  /* =====================================================================
+   *  Перфокарта — константы и таблицы кодировок
+   * ===================================================================== */
+  var PC_ROWS = 12;
+  var PC_COLS = 80;
+  var PC_ROW_LABELS = ['12','11','0','1','2','3','4','5','6','7','8','9'];
+  var PC_ROW_INDEX = {};
+  PC_ROW_LABELS.forEach(function(n, i) { PC_ROW_INDEX[n] = i; });
+
+  var punchHoles = [];
+  for (var pi = 0; pi < PC_ROWS; pi++) punchHoles.push(new Array(PC_COLS).fill(false));
+  var punchcardInitialized = false;
+
+  var UPP_CODES = {
+    '0':0x00,'1':0x01,'2':0x02,'3':0x03,'4':0x04,'5':0x05,'6':0x06,'7':0x07,'8':0x08,'9':0x09,
+    '+':0x0A,'-':0x0B,'/':0x0C,',':0x0D,'.':0x0E,' ':0x0F,
+    '↑':0x10,'(':0x11,')':0x12,'×':0x13,'=':0x15,';':0x16,'[':0x17,']':0x18,
+    '*':0x19,'`':0x1A,"'":0x1B,'≠':0x1C,'<':0x1D,'>':0x1E,':':0x1F,
+    'А':0x20,'Б':0x21,'В':0x22,'Г':0x23,'Д':0x24,'Е':0x25,'Ё':0x25,'Ж':0x26,'З':0x27,
+    'И':0x28,'Й':0x29,'К':0x2A,'Л':0x2B,'М':0x2C,'Н':0x2D,'О':0x2E,'П':0x2F,
+    'Р':0x30,'С':0x31,'Т':0x32,'У':0x33,'Ф':0x34,'Х':0x35,'Ц':0x36,'Ч':0x37,
+    'Ш':0x38,'Щ':0x39,'Ы':0x3A,'Ь':0x3B,'Э':0x3C,'Ю':0x3D,'Я':0x3E,'D':0x3F,'Ъ':0x3F,
+    'A':0x20,'B':0x22,'C':0x31,'E':0x25,'H':0x2D,'K':0x2A,'M':0x2C,'O':0x2E,
+    'P':0x30,'T':0x32,'X':0x35,'Y':0x33,
+    'F':0x40,'G':0x41,'I':0x42,'J':0x43,'L':0x44,'N':0x45,'Q':0x46,'R':0x47,
+    'S':0x48,'U':0x49,'V':0x4A,'W':0x4B,'Z':0x4C
+  };
+  var UPP_CODES_REV = {};
+  for (var upk in UPP_CODES) {
+    if (!UPP_CODES_REV[UPP_CODES[upk]] || (upk >= 'А' && upk <= 'Я'))
+      UPP_CODES_REV[UPP_CODES[upk]] = upk;
+  }
+
+  var COLUMN_MAP = {
+    ' ':[],'&':['12'],'×':['12'],'-':['11'],
+    '0':['0'],'1':['1'],'2':['2'],'3':['3'],'4':['4'],'5':['5'],'6':['6'],'7':['7'],'8':['8'],'9':['9'],
+    'A':['12','1'],'B':['12','2'],'C':['12','3'],'D':['12','4'],'E':['12','5'],'F':['12','6'],'G':['12','7'],'H':['12','8'],'I':['12','9'],
+    'J':['11','1'],'K':['11','2'],'L':['11','3'],'M':['11','4'],'N':['11','5'],'O':['11','6'],'P':['11','7'],'Q':['11','8'],'R':['11','9'],
+    '/':['0','1'],'S':['0','2'],'T':['0','3'],'U':['0','4'],'V':['0','5'],'W':['0','6'],'X':['0','7'],'Y':['0','8'],'Z':['0','9'],
+    'Ю':['12','1'],'Б':['12','2'],'Ц':['12','3'],'Д':['12','4'],'Ф':['12','5'],'Г':['12','6'],'И':['12','7'],'Й':['12','8'],'Л':['12','9'],
+    'П':['11','1'],'Я':['11','2'],'Ж':['11','3'],'Ь':['11','4'],'Ы':['11','5'],'Ш':['11','6'],'Э':['11','7'],'Щ':['11','8'],'Ч':['11','9'],
+    'З':['0','1'],'А':['12','1'],'В':['12','2'],'Е':['12','5'],'Ё':['12','5'],'К':['11','2'],'М':['11','4'],'Н':['11','5'],'О':['11','6'],'Р':['11','7'],'С':['11','9'],
+    'Т':['0','3'],'У':['0','4'],'Х':['0','7'],'Ъ':['0','9'],
+    ':':['8','2'],'≠':['8','3'],'#':['8','3'],'↑':['8','4'],'@':['8','4'],
+    '’':['8','5'],"'":['8','5'],'=':['8','6'],'‘':['8','7'],'"':['8','7'],
+    '[':['12','8','2'],'.':['12','8','3'],'<':['12','8','4'],'(':['12','8','5'],'+':['12','8','6'],'|':['12','8','7'],
+    ']':['11','8','2'],'◊':['11','8','3'],'$':['11','8','3'],'*':['11','8','4'],')':['11','8','5'],';':['11','8','6'],'¬':['11','8','7'],'^':['11','8','7'],
+    '␣':['0','8','2'],'\\':['0','8','2'],',':['0','8','3'],'%':['0','8','4'],'_':['0','8','5'],'>':['0','8','6'],
+    '⑩':['0','7','8'],'10':['0','7','8'],'?':['0','7','8']
+  };
+  var COLUMN_MAP_REV = {};
+  for (var cmk in COLUMN_MAP) {
+    if (COLUMN_MAP[cmk].length > 0) {
+      var sk = COLUMN_MAP[cmk].slice().sort().join(',');
+      if (!COLUMN_MAP_REV[sk] || cmk === '⑩') COLUMN_MAP_REV[sk] = cmk;
+    }
+  }
+
+  /* =====================================================================
+   *  Состояние
+   * ===================================================================== */
+  var state = {
+    tab:'besm6', theme:'dark',
+    widths:  { besm6:48, ieee:32, integer:16, command:24 },
+    values:  { besm6:0n, ieee:0n, integer:0n, command:0n },
+    signed:true, syntax:'autocode',
+    regFormat: 8,
+    registers: { A:0n, Y:0n, R:0n, C:0n, K:0n, M: new Array(16).fill(0n) },
+    reports: []
+  };
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function escapeHtml(t) {
+    return String(t).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+  function escapeSvgText(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function getBit(v, i) { return Number((v >> BigInt(i)) & 1n); }
+  function maskOf(w)    { return (1n << BigInt(w)) - 1n; }
+  function toBinary(v, w) { return v.toString(2).padStart(w, '0'); }
+  function toOctal(v, d)  { return v.toString(8).padStart(d, '0'); }
+  function groupDigits(b) { return b.replace(/(.{8})(?=.)/g, '$1 '); }
+  function formatNumber(x) {
+    if (Number.isNaN(x)) return 'NaN';
+    if (!Number.isFinite(x)) return x > 0 ? '+∞' : '-∞';
+    if (Object.is(x, -0)) return '-0';
+    return String(x);
+  }
+  function displayIndex(tab, zeroBasedIndex) {
+    if (tab === 'besm6' || tab === 'command') return zeroBasedIndex + 1;
+    return zeroBasedIndex;
+  }
+  function bitNumberingNote(tab) {
+    if (tab === 'besm6')   return 'Нумерация разрядов БЭСМ-6: бит 1 — младший, бит 48 — старший.';
+    if (tab === 'command') return 'Нумерация разрядов команды БЭСМ-6: бит 1 — младший, бит 24 — старший.';
+    if (tab === 'ieee')    return 'Нумерация IEEE-754: бит 0 — младший, старший — бит ' + (state.widths.ieee - 1) + '.';
+    if (tab === 'integer') return 'Нумерация целых: бит 0 — младший, старший — бит ' + (state.widths.integer - 1) + '.';
+    return '';
+  }
+
+  function getFields(tab, width, value) {
+    if (tab === 'besm6') return [
+      { name:'Порядок',  msb:47, lsb:41, kind:'exponent' },
+      { name:'Знак',     msb:40, lsb:40, kind:'sign'     },
+      { name:'Мантисса', msb:39, lsb:0,  kind:'fraction' }
+    ];
+    if (tab === 'ieee') {
+      var f = IEEE_FORMATS[width];
+      return [
+        { name:'Знак',          msb:width - 1,      lsb:width - 1,   kind:'sign'     },
+        { name:'Порядок',       msb:width - 2,      lsb:f.fracBits,  kind:'exponent' },
+        { name:'Дробная часть', msb:f.fracBits - 1, lsb:0,           kind:'fraction' }
+      ];
+    }
+    if (tab === 'integer') return state.signed
+      ? [ { name:'Знак', msb:width-1, lsb:width-1, kind:'sign' },
+          { name:'Разряды значения', msb:width-2, lsb:0, kind:'value' } ]
+      : [ { name:'Беззнаковое значение', msb:width-1, lsb:0, kind:'value' } ];
+    if (tab === 'command') {
+      var isLong = getBit(value, 19) === 1;
+      return isLong
+        ? [ { name:'Индекс-регистр', msb:23, lsb:20, kind:'register' },
+            { name:'Формат',         msb:19, lsb:19, kind:'format'   },
+            { name:'Код операции',   msb:18, lsb:15, kind:'opcode'   },
+            { name:'Адрес',          msb:14, lsb:0,  kind:'address'  } ]
+        : [ { name:'Индекс-регистр',    msb:23, lsb:20, kind:'register' },
+            { name:'Формат',            msb:19, lsb:19, kind:'format'   },
+            { name:'Расширение адреса', msb:18, lsb:18, kind:'format'   },
+            { name:'Код операции',      msb:17, lsb:12, kind:'opcode'   },
+            { name:'Адрес',             msb:11, lsb:0,  kind:'address'  } ];
+    }
+    return [];
+  }
+  function findField(fields, idx) {
+    for (var i = 0; i < fields.length; i++)
+      if (idx >= fields[i].lsb && idx <= fields[i].msb) return fields[i];
+    return null;
+  }
+
+  function besm6Float(value) {
+    var rawExp = Number((value >> 41n) & 0x7Fn);
+    var mant = value & ((1n << 41n) - 1n);
+    if ((mant & (1n << 40n)) !== 0n) mant -= (1n << 41n);
+    return Number(mant) * Math.pow(2, rawExp - 104);
+  }
+
+  /* =====================================================================
+   *  Декодеры
+   * ===================================================================== */
+  function decodeBesm6(value) {
+    var rawExp = Number((value >> 41n) & 0x7Fn);
+    var exp = rawExp - 64;
+    var mant = value & ((1n << 41n) - 1n);
+    if ((mant & (1n << 40n)) !== 0n) mant -= (1n << 41n);
+    var numeric = besm6Float(value);
+    var steps = [
+      'Биты 48–42 дают смещённый порядок P = ' + rawExp + '.',
+      'Истинный порядок: ' + rawExp + ' − 64 = ' + exp + '.',
+      'Биты 41–1 — знаковое 41-битное число в дополнительном коде: M = ' + mant + '.',
+      'Подстановка: ' + mant + ' / 2^40 × 2^(' + rawExp + ' − 64) = ' + formatNumber(numeric) + '.'
+    ];
+    if (value === 0n) steps.push('Все биты равны нулю, поэтому результат — ноль.');
+    var formula =
+      '<b>V</b> <span class="op">=</span> M / 2<span class="sup">40</span> ' +
+      '<span class="op">×</span> 2<span class="sup">(P − 64)</span><br>' +
+      'P <span class="op">=</span> биты 48…42 (беззнаковое 7-битное)<br>' +
+      'M <span class="op">=</span> знаковое 41-битное (доп. код) из битов 41…1<br>' +
+      'V <span class="op">=</span> <span class="num">' + mant + '</span> / 2<span class="sup">40</span> ' +
+      '<span class="op">×</span> 2<span class="sup">(' + rawExp + ' − 64)</span> ' +
+      '<span class="op">=</span> <span class="num">' + formatNumber(numeric) + '</span>';
+    return { kind:'besm6', value:numeric, rawExponent:rawExp, exponent:exp,
+      mantissa:mant, steps:steps, formula:formula,
+      resultText:formatNumber(numeric),
+      inputText: groupDigits(toBinary(value, 48)) + '₂ (' + toOctal(value, 16) + '₈)',
+      operation: 'БЭСМ-6 — нативное 48-битное число' };
+  }
+
+  function halfToNumber(b) {
+    var s = (b >> 15) & 1, e = (b >> 10) & 0x1F, f = b & 0x3FF, v;
+    if (e === 0)       v = Math.pow(2, -14) * (f / 1024);
+    else if (e === 31) v = f === 0 ? Infinity : NaN;
+    else               v = Math.pow(2, e - 15) * (1 + f / 1024);
+    return s ? -v : v;
+  }
+  function ieeeRuntimeValue(v, w) {
+    if (w === 16) return halfToNumber(Number(v));
+    var buf = new ArrayBuffer(8), dv = new DataView(buf);
+    if (w === 32) { dv.setUint32(0, Number(v & 0xFFFFFFFFn)); return dv.getFloat32(0); }
+    dv.setBigUint64(0, v); return dv.getFloat64(0);
+  }
+  function decodeIeee(value, width) {
+    var f = IEEE_FORMATS[width];
+    var sign = getBit(value, width - 1);
+    var rawExp = Number((value >> BigInt(f.fracBits)) & ((1n << BigInt(f.expBits)) - 1n));
+    var maxExp = (1 << f.expBits) - 1;
+    var frac = value & ((1n << BigInt(f.fracBits)) - 1n);
+    var numeric = ieeeRuntimeValue(value, width);
+    var cls, clsText, formula;
+    var steps = [
+      'Формат ' + f.name + ': 1 бит знака, ' + f.expBits + ' бит порядка, ' +
+        f.fracBits + ' бит дробной части.',
+      'Знак s = ' + sign + ', множитель (−1)^' + sign + ' = ' + (sign ? '−1' : '1') + '.',
+      'Сырой порядок E = ' + rawExp + ', дробная часть F = ' + frac + '.'
+    ];
+    var eBits = (width - 2) + '…' + f.fracBits;
+    var fBits = (f.fracBits - 1) + '…0';
+    if (rawExp === 0 && frac === 0n) {
+      cls = sign ? 'neg-zero' : 'pos-zero'; clsText = sign ? '−0' : '+0';
+      formula = 'Особый случай: <b>E = 0</b>, <b>F = 0</b> → знаковый ноль.';
+      steps.push('Порядок и дробная часть равны нулю: знаковый ноль.');
+    } else if (rawExp === 0) {
+      cls = 'subnormal'; clsText = 'Субнормальное';
+      var subExp = 1 - f.bias;
+      steps.push('E = 0, F ≠ 0 → субнормальное, скрытой единицы нет.');
+      steps.push('Истинный порядок = 1 − ' + f.bias + ' = ' + subExp + '.');
+      formula = '<b>V</b> <span class="op">=</span> (−1)<span class="sup">s</span> ' +
+        '<span class="op">×</span> (F / 2<span class="sup">' + f.fracBits + '</span>) ' +
+        '<span class="op">×</span> 2<span class="sup">(1 − ' + f.bias + ')</span><br>' +
+        's = бит ' + (width - 1) + ', E = биты ' + eBits + ', F = биты ' + fBits;
+    } else if (rawExp === maxExp && frac === 0n) {
+      cls = sign ? 'neg-inf' : 'pos-inf'; clsText = sign ? '−∞' : '+∞';
+      formula = 'Особый случай: <b>E = max</b>, <b>F = 0</b> → бесконечность со знаком s.';
+      steps.push('Все биты порядка 1, дробная часть 0: бесконечность.');
+    } else if (rawExp === maxExp) {
+      cls = 'nan'; clsText = 'NaN';
+      formula = 'Особый случай: <b>E = max</b>, <b>F ≠ 0</b> → NaN (не число).';
+      steps.push('Все биты порядка 1, дробная часть ненулевая: NaN.');
+    } else {
+      cls = 'normal'; clsText = 'Нормализованное';
+      var normExp = rawExp - f.bias;
+      steps.push('E не крайний → нормальное, скрытая единица перед дробью.');
+      steps.push('Истинный порядок = ' + rawExp + ' − ' + f.bias + ' = ' + normExp + '.');
+      formula = '<b>V</b> <span class="op">=</span> (−1)<span class="sup">s</span> ' +
+        '<span class="op">×</span> (1 + F / 2<span class="sup">' + f.fracBits + '</span>) ' +
+        '<span class="op">×</span> 2<span class="sup">(E − ' + f.bias + ')</span><br>' +
+        's = бит ' + (width - 1) + ', E = биты ' + eBits + ', F = биты ' + fBits + '<br>' +
+        'V <span class="op">=</span> (−1)<span class="sup">' + sign + '</span> ' +
+        '<span class="op">×</span> (1 + <span class="num">' + frac + '</span> / 2<span class="sup">' +
+        f.fracBits + '</span>) <span class="op">×</span> 2<span class="sup">(' +
+        rawExp + ' − ' + f.bias + ')</span> = <span class="num">' + formatNumber(numeric) + '</span>';
+    }
+    var resultText = cls === 'pos-inf' ? '+∞' : cls === 'neg-inf' ? '−∞'
+      : cls === 'nan' ? 'NaN' : cls === 'neg-zero' ? '−0' : formatNumber(numeric);
+    return { kind:'ieee', value:numeric, rawExponent:rawExp, fraction:frac,
+      classification:cls, classText:clsText, formula:formula, steps:steps,
+      resultText:resultText,
+      inputText: groupDigits(toBinary(value, width)) + '₂ (0x' +
+                 value.toString(16).toUpperCase().padStart(width / 4, '0') + ')',
+      operation: 'IEEE-754 — ' + f.name };
+  }
+
+  function decodeInteger(value, width, signed) {
+    var negative = signed && getBit(value, width - 1) === 1;
+    var result = negative ? value - (1n << BigInt(width)) : value;
+    var steps = [ signed ? 'Знаковый режим: дополнительный код.'
+                         : 'Беззнаковый режим: все биты дают положительный вклад.' ];
+    var contrib = [];
+    for (var bit = width - 1; bit >= 0; bit--) {
+      if (getBit(value, bit) === 0) continue;
+      var c = (negative && bit === width - 1) ? -(1n << BigInt(bit)) : (1n << BigInt(bit));
+      contrib.push(c);
+      steps.push('Бит ' + bit + ' = 1 → ' + (c < 0n ? '−' : '') + '2^' + bit + ' = ' + c.toString() + '.');
+    }
+    if (contrib.length === 0) steps.push('Установленных битов нет, сумма равна 0.');
+    else steps.push('Сумма вкладов = ' + result.toString() + '.');
+    var formula = signed
+      ? '<b>V</b> <span class="op">=</span> −b<span class="sub">' + (width - 1) + '</span> · 2<span class="sup">' +
+        (width - 1) + '</span> + Σ<span class="sub">i = 0…' + (width - 2) +
+        '</span> b<span class="sub">i</span> · 2<span class="sup">i</span><br>' +
+        'старший бит ' + (width - 1) + ' — знак в дополнительном коде'
+      : '<b>V</b> <span class="op">=</span> Σ<span class="sub">i = 0…' + (width - 1) +
+        '</span> b<span class="sub">i</span> · 2<span class="sup">i</span>';
+    return { kind:'integer', value:result, formula:formula, steps:steps,
+      resultText: result.toString(),
+      inputText: groupDigits(toBinary(value, width)) + '₂',
+      operation: (signed ? 'Знаковое ' : 'Беззнаковое ') + width + '-битное целое' };
+  }
+
+  function lookupMnem(syntax, isLong, rawOpcode) {
+    var key = (syntax === 'madlen') ? 'b6as' : syntax;
+    var table = (isLong ? F2_MNEM : F1_MNEM)[key];
+    return (table && table[rawOpcode]) || '';
+  }
+
+  function decodeCommand(value, syntax) {
+    var half = Number(value & 0xFFFFFFn);
+    var register = (half >> 20) & 0xF;
+    var isLong = ((half >> 19) & 1) === 1;
+    var rawOpcode, offset, extension = false;
+    if (isLong) { rawOpcode = (half >> 15) & 0xF; offset = half & 0x7FFF; }
+    else { extension = ((half >> 18) & 1) === 1; rawOpcode = (half >> 12) & 0x3F; offset = half & 0xFFF; if (extension) offset |= 0x7000; }
+    var mnemonic = lookupMnem(syntax, isLong, rawOpcode);
+    var description = (isLong ? F2_DESC : F1_DESC)[rawOpcode] || '';
+    var isExtracode = !isLong && rawOpcode >= 0x28 && rawOpcode <= 0x3F;
+    if (isExtracode) { mnemonic = 'Э' + toOctal(rawOpcode, 2); description = 'экстракод / системный вызов'; }
+    var tradOpcode = isLong ? (rawOpcode | 0x10) : rawOpcode;
+    var addrOct = toOctal(offset, 5);
+    var displayText;
+    if (isExtracode) {
+      var extOct = toOctal(rawOpcode, 2);
+      switch (syntax) {
+        case 'autocode': displayText = 'Э' + extOct; break;
+        case 'bemsh':    displayText = 'э' + extOct; break;
+        case 'b6as':     displayText = '$' + extOct; break;
+        case 'madlen':   displayText = ',*' + extOct + ','; break;
+        default:         displayText = 'Э' + extOct;
+      }
+    } else if (!mnemonic || mnemonic === '—') {
+      displayText = '* ' + toOctal(tradOpcode, isLong ? 3 : 2) + ' (нет мнемоники)';
+    } else {
+      switch (syntax) {
+        case 'autocode': displayText = mnemonic + ' M' + register + ' ' + addrOct; break;
+        case 'bemsh':    displayText = mnemonic + ' ' + register + ',' + addrOct; break;
+        case 'b6as':     displayText = mnemonic + ' ' + register + ', ' + addrOct; break;
+        case 'madlen':
+          var latin = lookupMnem('b6as', isLong, rawOpcode);
+          displayText = latin ? ',' + latin + ',' + register + ' ' + addrOct + ','
+                              : ',*' + toOctal(tradOpcode, isLong ? 3 : 2) + ',' + register + ' ' + addrOct + ',';
+          break;
+        default: displayText = mnemonic + ' ' + register + ' ' + addrOct;
+      }
+    }
+    var steps = [
+      'Биты 24–21: (команда >> 20) & 0xF = ' + register + '; выбран M' + register + '.',
+      'Форматный бит 20 = ' + (isLong ? 1 : 0) + ': команда ' +
+        (isLong ? 'длинная (Format 2)' : 'короткая (Format 1)') + '.'
+    ];
+    if (isLong) {
+      steps.push('OPCode2: биты 19–16 = ' + toOctal(rawOpcode, 2) +
+                 '₈ → традиционный код ' + toOctal(tradOpcode, 2) + '₈ — ' + (mnemonic || '—') + '.');
+      steps.push('Адрес: биты 15–1 = ' + addrOct + '₈ = ' + offset + '₁₀.');
+    } else {
+      steps.push('Бит 19 расширения адреса = ' + (extension ? 1 : 0) +
+                 '; старшие три бита адреса заполняются ' + (extension ? 'единицами' : 'нулями') + '.');
+      steps.push('OPCode1: биты 18–13 = ' + toOctal(rawOpcode, 2) + '₈ — ' + (mnemonic || '—') + '.');
+      steps.push('Адрес: биты 12–1 = ' + toOctal(half & 0xFFF, 4) + '₈' +
+                 (extension ? ' | 070000' : '') + ' = ' + addrOct + '₈ = ' + offset + '₁₀.');
+    }
+    steps.push('Синтаксис ассемблера: ' + SYNTAX_LABEL[syntax] + ' → «' + displayText + '».');
+    var formula =
+      '<b>M</b> <span class="op">=</span> (cmd ≫ 20) &amp; 0xF<br>' +
+      '<b>F</b> <span class="op">=</span> (cmd ≫ 19) &amp; 0x1<br>' +
+      (isLong
+        ? '<b>op</b> <span class="op">=</span> (cmd ≫ 15) &amp; 0xF    (традиц. ' + toOctal(tradOpcode, 2) + '₈)<br>' +
+          '<b>addr</b> <span class="op">=</span> cmd &amp; 0x7FFF'
+        : '<b>op</b> <span class="op">=</span> (cmd ≫ 12) &amp; 0x3F<br>' +
+          '<b>addr</b> <span class="op">=</span> (cmd &amp; 0xFFF)' + (extension ? ' | 0x7000' : '')) +
+      '<br><span class="op">→</span> ' + escapeHtml(displayText);
+    return { kind:'command', register:register, isLong:isLong,
+      opcode:tradOpcode, rawOpcode:rawOpcode, address:offset,
+      mnemonic:mnemonic, description:description,
+      isExtracode:isExtracode, syntax:syntax, displayText:displayText,
+      formula:formula, steps:steps, resultText:displayText,
+      inputText: groupDigits(toBinary(value, 24)) + '₂ (' + toOctal(value, 8) + '₈)',
+      operation:'БЭСМ-6 — ' + SYNTAX_LABEL[syntax] + ' — декодирование 24-битной команды' };
+  }
+
+  /* =====================================================================
+   *  Регистры
+   * ===================================================================== */
+  function regFormatName(fmt) {
+    return fmt === 8 ? 'восьмеричный' : fmt === 10 ? 'десятичный' : 'шестнадцатеричный';
+  }
+  function regSuffix(fmt) { return fmt === 8 ? '₈' : fmt === 10 ? '₁₀' : '₁₆'; }
+  function formatReg(value, width, fmt) {
+    if (fmt === 8)  return value.toString(8).padStart(Math.ceil(width / 3), '0');
+    if (fmt === 16) return value.toString(16).toUpperCase().padStart(Math.ceil(width / 4), '0');
+    return value.toString(10);
+  }
+  function regWidth(name) {
+    if (name === 'A' || name === 'Y') return 48;
+    if (name === 'R') return 6;
+    return 15;
+  }
+  function regClass(name) {
+    if (name === 'A' || name === 'Y') return 'sz-48';
+    if (name === 'R') return 'sz-6';
+    return 'sz-15';
+  }
+  function getRegValue(name) {
+    if (name === 'A' || name === 'Y' || name === 'R' || name === 'C' || name === 'K')
+      return state.registers[name];
+    if (name.charAt(0) === 'M') {
+      var idx = parseInt(name.slice(1), 10);
+      return state.registers.M[idx] || 0n;
+    }
+    throw new Error('Неизвестный регистр: ' + name);
+  }
+  function setRegValue(name, val, width) {
+    val = val & maskOf(width);
+    if (name === 'A' || name === 'Y' || name === 'R' || name === 'C' || name === 'K')
+      state.registers[name] = val;
+    else if (name.charAt(0) === 'M') {
+      var idx = parseInt(name.slice(1), 10);
+      if (idx >= 0 && idx < 16) state.registers.M[idx] = val;
+    }
+  }
+  function renderRDecoding(r) {
+    var v = Number(r & 0x3Fn);
+    var ovfDisable = (v >> 5) & 1;
+    var omega = (v >> 2) & 0x7;
+    var roundDis = (v >> 1) & 1;
+    var normDis = v & 1;
+    var omegaName;
+    switch (omega) {
+      case 4: omegaName = 'Аддитивный'; break;
+      case 2: omegaName = 'Мультипликативный'; break;
+      case 1: omegaName = 'Логический'; break;
+      case 0: omegaName = 'Не задан (ω = 1)'; break;
+      default: omegaName = '?';
+    }
+    function row(pos, label, extra, set) {
+      return '<div class="r-bit' + (set ? ' set' : '') + '">' +
+        '<span class="r-pos">' + pos + '</span>' +
+        '<span class="r-label">' + escapeHtml(label) + '</span>' +
+        '<span class="r-value">' + escapeHtml(extra) + '</span>' +
+      '</div>';
+    }
+    return row('бит 6', 'Запрет переполнения', ovfDisable ? 'установлен' : 'сброшен', ovfDisable) +
+           row('биты 5–3', 'ω-режим: ' + omegaName, omega.toString(2).padStart(3, '0'), omega !== 0) +
+           row('бит 2', 'Запрет округления', roundDis ? 'установлен' : 'сброшен', roundDis) +
+           row('бит 1', 'Запрет нормализации', normDis ? 'установлен' : 'сброшен', normDis);
+  }
+  function renderRegBits(name, width, value, isReadonly) {
+    var cls = regClass(name);
+    var html = '<div class="reg-bits ' + cls + '" data-reg-bits="' + name + '">';
+    for (var i = width - 1; i >= 0; i--) {
+      var bit = getBit(value, i);
+      var sep = (i < width - 1 && (i + 1) % 8 === 0) ? ' group-sep' : '';
+      var dis = isReadonly ? ' disabled' : '';
+      var fontCls = width >= 48 ? ' sz-48-font' : '';
+      html += '<button type="button" class="reg-bit' + (bit ? ' on' : '') + sep + fontCls +
+              '" data-reg="' + name + '" data-bit="' + i + '"' + dis +
+              ' title="бит ' + (i + 1) + ' = ' + bit + '">' + bit + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
+  function renderRegValue(name, value, width) {
+    var text = formatReg(value, width, state.regFormat);
+    var suffix = regSuffix(state.regFormat);
+    var extra = '';
+    if (name === 'A' || name === 'Y')
+      extra = '  ≈ <strong>' + formatNumber(besm6Float(value)) + '</strong>';
+    return text + suffix + extra;
+  }
+  function regRowHtml(name, subLabel, width, value, isReadonly) {
+    var displayName = name;
+    if (name.charAt(0) === 'M') {
+      var mIdx = parseInt(name.slice(1), 10);
+      displayName = 'M<sub>' + mIdx.toString(8) + '</sub>';
+    }
+    return '<div class="reg-line" data-reg-line="' + name + '">' +
+      '<span class="reg-label">' + displayName +
+        (subLabel ? '<small>' + subLabel + '</small>' : '') + '</span>' +
+      renderRegBits(name, width, value, isReadonly) +
+      '<span class="reg-value">' + renderRegValue(name, value, width) + '</span>' +
+    '</div>';
+  }
+  function renderRegistersPanel() {
+    var fmt = state.regFormat, r = state.registers, suffix = regSuffix(fmt);
+    var html = '<div class="registers-view">';
+    html += '<div class="reg-section"><h3>Основные регистры <span class="hint">(48 бит, ' +
+      regFormatName(fmt) + ' формат ' + suffix + ')</span></h3>' +
+      regRowHtml('A', 'акк', 48, r.A, false) +
+      regRowHtml('Y', 'РМР', 48, r.Y, false) + '</div>';
+    html += '<div class="reg-section"><h3>Регистр режима R (РАУ) <span class="hint">(6 бит)</span></h3>' +
+      regRowHtml('R', null, 6, r.R, false) +
+      '<div class="r-decode" id="R-decode">' + renderRDecoding(r.R) + '</div></div>';
+    html += '<div class="reg-section"><h3>Индексные регистры M<sub>0</sub>–M<sub>15</sub> ' +
+      '<span class="hint">(15 бит, M<sub>0</sub> ≡ 0, M<sub>17</sub> — стек)</span></h3><div class="reg-mgrid">';
+    for (var i = 0; i < 16; i++) html += regRowHtml('M' + i, null, 15, r.M[i], i === 0);
+    html += '</div></div>';
+    html += '<div class="reg-section"><h3>Регистры адресации и управления <span class="hint">(15 бит)</span></h3>' +
+      regRowHtml('C', 'модиф.', 15, r.C, false) +
+      regRowHtml('K', 'счётч.', 15, r.K, false) + '</div>';
+    html += '</div>';
+    resultCard.innerHTML = html;
+  }
+  function decodeRegisters() {
+    var fmt = state.regFormat, sfx = regSuffix(fmt), r = state.registers;
+    var steps = [];
+    steps.push('A = ' + formatReg(r.A, 48, fmt) + sfx + '  →  V = ' + formatNumber(besm6Float(r.A)));
+    steps.push('Y = ' + formatReg(r.Y, 48, fmt) + sfx);
+    var rv = Number(r.R & 0x3Fn), omega = (rv >> 2) & 0x7;
+    var omegaName = omega === 4 ? 'аддитивный' : omega === 2 ? 'мультипликативный'
+                  : omega === 1 ? 'логический' : 'не задан';
+    steps.push('R = ' + formatReg(r.R, 6, fmt) + sfx + '  →  ω = ' + omegaName +
+      ',  запрет переполнения = ' + ((rv >> 5) & 1) +
+      ',  запрет округления = ' + ((rv >> 1) & 1) +
+      ',  запрет нормализации = ' + (rv & 1));
+    for (var i = 1; i <= 15; i++)
+      steps.push('M[' + i.toString(8).padStart(2, '0') + '] = ' + formatReg(r.M[i], 15, fmt) + sfx);
+    steps.push('C = ' + formatReg(r.C, 15, fmt) + sfx);
+    steps.push('K = ' + formatReg(r.K, 15, fmt) + sfx);
+    return { kind:'registers', steps:steps, formula:null,
+      resultText:'Снимок регистров БЭСМ-6 (' + regFormatName(fmt) + ' формат)',
+      inputText:'формат вывода: ' + fmt,
+      operation:'БЭСМ-6 — состояние регистров процессора' };
+  }
+
+  /* =====================================================================
+   *  Перфокарта — логика
+   * ===================================================================== */
+  function pcCharToUPP(ch) {
+    var upper = ch.toUpperCase();
+    return UPP_CODES.hasOwnProperty(upper) ? UPP_CODES[upper] : UPP_CODES[' '];
+  }
+  function pcAddOddParity(code7) {
+    var bits = 0, temp = code7;
+    for (var i = 0; i < 7; i++) { if (temp & 1) bits++; temp >>= 1; }
+    var parityBit = (bits % 2 === 0) ? 1 : 0;
+    return (parityBit << 7) | code7;
+  }
+  function generatePunchFromText() {
+    if (!document.getElementById('gridArea')) return;
+    var format = document.getElementById('pcFormat').value;
+    var text = document.getElementById('pcText').value;
+    punchHoles = [];
+    for (var i = 0; i < PC_ROWS; i++) punchHoles.push(new Array(PC_COLS).fill(false));
+    if (format === 'row') {
+      var startRow = 2, charsPerRow = 10, charIndex = 0;
+      for (var r = startRow; r < PC_ROWS; r++) {
+        for (var cp = 0; cp < charsPerRow; cp++) {
+          if (charIndex >= text.length) break;
+          var code7 = pcCharToUPP(text[charIndex]);
+          var code8 = pcAddOddParity(code7);
+          var baseCol = cp * 8;
+          for (var b = 0; b < 8; b++) {
+            if ((code8 >> (7 - b)) & 1) punchHoles[r][baseCol + b] = true;
+          }
+          charIndex++;
+        }
+      }
+    } else {
+      var upperText = text.toUpperCase();
+      var len = Math.min(upperText.length, PC_COLS);
+      for (var c = 0; c < len; c++) {
+        var punches = COLUMN_MAP[upperText[c]];
+        if (punches) {
+          punches.forEach(function(rn) {
+            var ri = PC_ROW_INDEX[rn];
+            if (ri !== undefined) punchHoles[ri][c] = true;
+          });
+        }
+      }
+    }
+    renderPunchHoles();
+  }
+  function renderPunchHoles() {
+    var gridArea = document.getElementById('gridArea');
+    if (!gridArea) return;
+    var cells = gridArea.querySelectorAll('.cell');
+    cells.forEach(function(cell) {
+      var r = parseInt(cell.dataset.row);
+      var c = parseInt(cell.dataset.col);
+      cell.classList.toggle('hole', punchHoles[r][c]);
+    });
+  }
+  function updateTextFromPunchHoles() {
+    var format = document.getElementById('pcFormat').value;
+    var result = '';
+    if (format === 'row') {
+      for (var r = 2; r < PC_ROWS; r++) {
+        for (var cp = 0; cp < 10; cp++) {
+          var code8 = 0, hasPunch = false;
+          for (var b = 0; b < 8; b++) {
+            if (punchHoles[r][cp * 8 + b]) { code8 |= (1 << (7 - b)); hasPunch = true; }
+          }
+          result += hasPunch ? (UPP_CODES_REV[code8 & 0x7F] || ' ') : ' ';
+        }
+      }
+    } else {
+      for (var c = 0; c < PC_COLS; c++) {
+        var punchList = [];
+        for (var r = 0; r < PC_ROWS; r++)
+          if (punchHoles[r][c]) punchList.push(PC_ROW_LABELS[r]);
+        if (punchList.length === 0) result += ' ';
+        else result += COLUMN_MAP_REV[punchList.sort().join(',')] || '?';
+      }
+    }
+    document.getElementById('pcText').value = result.trimEnd();
+  }
+  function buildPunchGrid() {
+    var gridArea = document.getElementById('gridArea');
+    var colNumsTop = document.getElementById('colNumsTop');
+    var colNumsBottom = document.getElementById('colNumsBottom');
+    if (!gridArea) return;
+    gridArea.innerHTML = '';
+    colNumsTop.innerHTML = '';
+    colNumsBottom.innerHTML = '';
+    for (var i = 0; i < PC_COLS; i++) {
+      var colNum = i + 1;
+      var numText = '';
+      if (colNum === 1) numText = '1';
+      else if (colNum === 2) numText = '2';
+      else if (colNum % 2 === 0) numText = colNum;
+      var topCell = document.createElement('div');
+      topCell.className = 'num-cell';
+      topCell.textContent = numText || '\u00A0';
+      colNumsTop.appendChild(topCell);
+      var botCell = document.createElement('div');
+      botCell.className = 'num-cell';
+      botCell.textContent = numText || '\u00A0';
+      colNumsBottom.appendChild(botCell);
+    }
+    for (var r = 0; r < PC_ROWS; r++) {
+      for (var c = 0; c < PC_COLS; c++) {
+        var cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+        var span = document.createElement('span');
+        if (r >= 2) span.textContent = PC_ROW_LABELS[r];
+        else span.textContent = '\u00A0';
+        cell.appendChild(span);
+        cell.addEventListener('click', (function(rr, cc) {
+          return function() {
+            punchHoles[rr][cc] = !punchHoles[rr][cc];
+            renderPunchHoles();
+            updateTextFromPunchHoles();
+          };
+        })(r, c));
+        gridArea.appendChild(cell);
+      }
+    }
+    renderPunchHoles();
+  }
+  function updatePunchZoom() {
+    var scaleSel = document.getElementById('pcZoom');
+    if (!scaleSel) return;
+    var scale = parseFloat(scaleSel.value);
+    var outer = document.querySelector('#punchcard-view .pc-outer');
+    var inner = document.querySelector('#punchcard-view .pc-inner');
+    if (outer) {
+      outer.style.width = 'calc(188.325mm * ' + scale + ')';
+      outer.style.height = 'calc(83.55mm * ' + scale + ')';
+    }
+    if (inner) inner.style.transform = 'scale(' + scale + ')';
+  }
+  function renderPunchcardView() {
+    var html = '<div id="punchcard-view">' +
+      '<div class="pc-presets" id="pcPresets"></div>' +
+      '<div class="pc-scroll">' +
+        '<div class="pc-outer">' +
+          '<div class="pc-inner">' +
+            '<div class="card-wrapper" id="pcCardExport">' +
+              '<div class="card">' +
+                '<div class="top-text">КОДИРОВКА CDC ABCDEFGHIJKLMNOPQR/STUVWXYZ1234567890ЮБЦДФГИЙЛПЯЖЬЫШЭЩЧЗ[.<(+|]◊*);¬␣,%_>⑩:≠↑’=‘×</div>' +
+                '<div class="grid-area" id="gridArea"></div>' +
+                '<div class="col-nums top" id="colNumsTop"></div>' +
+                '<div class="col-nums bottom" id="colNumsBottom"></div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    resultCard.innerHTML = html;
+
+    var presets = ['⑩','≠','↑','◊','¬','␣','’','‘','×'];
+    var presetBox = document.getElementById('pcPresets');
+    presets.forEach(function(ch) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pc-preset-btn';
+      b.textContent = ch;
+      b.title = 'Вставить «' + ch + '»';
+      b.addEventListener('click', function() {
+        document.getElementById('pcText').value += ch;
+        generatePunchFromText();
+      });
+      presetBox.appendChild(b);
+    });
+
+    buildPunchGrid();
+    if (!punchcardInitialized) {
+      punchcardInitialized = true;
+      generatePunchFromText();
+    }
+    updatePunchZoom();
+  }
+  function decodePunchcardReport() {
+    var text = document.getElementById('pcText').value;
+    var format = document.getElementById('pcFormat').value;
+    var formatName = format === 'row' ? 'Построчный (УПП-IBM)' : 'Колоночный (IBM)';
+    var holesCount = 0;
+    for (var r = 0; r < PC_ROWS; r++)
+      for (var c = 0; c < PC_COLS; c++)
+        if (punchHoles[r][c]) holesCount++;
+    return {
+      kind: 'punchcard',
+      steps: [
+        'Текст: «' + text + '»',
+        'Кодировка: ' + formatName,
+        'Размер карты: 187.325 × 82.55 мм, 80 колонок × 12 строк',
+        'Пробивок на карте: ' + holesCount,
+        'Символов на карте: ' + text.length
+      ],
+      formula: null,
+      resultText: 'Карта на ' + holesCount + ' пробивок',
+      inputText: 'формат: ' + formatName,
+      operation: 'БЭСМ-6 — подготовка перфокарты'
+    };
+  }
+
+  /* --- Загрузка html2canvas ленивая --- */
+  function loadHtml2Canvas() {
+    return new Promise(function(resolve, reject) {
+      if (window.html2canvas) { resolve(window.html2canvas); return; }
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.onload = function() { resolve(window.html2canvas); };
+      script.onerror = function() { reject(new Error('Не удалось загрузить html2canvas')); };
+      document.head.appendChild(script);
+    });
+  }
+  function exportPunchPNG() {
+    var target = document.getElementById('pcCardExport');
+    if (!target) return;
+    var inner = document.querySelector('#punchcard-view .pc-inner');
+    var outer = document.querySelector('#punchcard-view .pc-outer');
+    if (!inner || !outer) return;
+    var savedTransform = inner.style.transform;
+    var savedWidth = outer.style.width;
+    var savedHeight = outer.style.height;
+    inner.style.transform = 'none';
+    outer.style.width = 'auto';
+    outer.style.height = 'auto';
+    function restore() {
+      inner.style.transform = savedTransform;
+      outer.style.width = savedWidth;
+      outer.style.height = savedHeight;
+    }
+    loadHtml2Canvas().then(function() {
+      return html2canvas(target, {
+        scale: 4, backgroundColor: null, useCORS: true, logging: false
+      });
+    }).then(function(canvas) {
+      restore();
+      var link = document.createElement('a');
+      link.download = 'besm6_punchcard.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }).catch(function(err) {
+      restore();
+      logError('PNG export', err);
+      alert('Не удалось создать PNG: ' + (err.message || err));
+    });
+  }
+  function exportPunchSVG() {
+    var W = 187.325, H = 82.55;
+    var holeW = 1.397, holeH = 3.175;
+    var dx = 2.2098, dy = 6.35;
+    var x0 = 4.5466, y0 = 4.7625;
+    var topText = 'КОДИРОВКА CDC ABCDEFGHIJKLMNOPQR/STUVWXYZ1234567890ЮБЦДФГИЙЛПЯЖЬЫШЭЩЧЗ[.<(+|]◊*);¬␣,%_>⑩:≠↑’=‘×';
+    topText = escapeSvgText(topText);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + 'mm" height="' + H + 'mm" viewBox="0 0 ' + W + ' ' + H + '">';
+    svg += '<polygon points="6.35,0 ' + W + ',0 ' + W + ',' + H + ' 0,' + H + ' 0,6.35" fill="#FAD7B9" stroke="#9D7E61" stroke-width="0.3"/>';
+    svg += '<text x="7" y="2.5" font-family="Courier New, monospace" font-size="2.1" font-weight="bold" fill="#9D7E61">' + topText + '</text>';
+    for (var r = 0; r < PC_ROWS; r++) {
+      for (var c = 0; c < PC_COLS; c++) {
+        var hx = x0 + c * dx, hy = y0 + r * dy;
+        var cx = hx + holeW / 2, cy = hy + holeH / 2;
+        if (r >= 2) {
+          svg += '<text x="' + cx.toFixed(3) + '" y="' + cy.toFixed(3) +
+                 '" dy="0.35em" font-family="Courier New, monospace" font-size="1.6"' +
+                 ' font-weight="bold" fill="#9D7E61" text-anchor="middle" opacity="0.6">' +
+                 PC_ROW_LABELS[r] + '</text>';
+        }
+        if (punchHoles[r][c]) {
+          svg += '<rect x="' + hx.toFixed(4) + '" y="' + hy.toFixed(4) +
+                 '" width="' + holeW + '" height="' + holeH + '" fill="#2b1d14"/>';
+        }
+      }
+    }
+    svg += '<rect x="0" y="14.875" width="' + W + '" height="2" fill="#FAD7B9"/>';
+    for (var c2 = 0; c2 < PC_COLS; c2++) {
+      var colNum = c2 + 1, text = '';
+      if (colNum === 1) text = '1';
+      else if (colNum === 2) text = '2';
+      else if (colNum % 2 === 0) text = colNum.toString();
+      if (text) {
+        var cx2 = x0 + holeW / 2 + c2 * dx;
+        svg += '<text x="' + cx2.toFixed(3) + '" y="15.875" dominant-baseline="central"' +
+               ' font-family="Courier New, monospace" font-size="1.2" font-weight="bold"' +
+               ' fill="#9D7E61" text-anchor="middle">' + text + '</text>';
+      }
+    }
+    svg += '<rect x="0" y="78.375" width="' + W + '" height="2" fill="#FAD7B9"/>';
+    for (var c3 = 0; c3 < PC_COLS; c3++) {
+      var colNum3 = c3 + 1, text3 = '';
+      if (colNum3 === 1) text3 = '1';
+      else if (colNum3 === 2) text3 = '2';
+      else if (colNum3 % 2 === 0) text3 = colNum3.toString();
+      if (text3) {
+        var cx3 = x0 + holeW / 2 + c3 * dx;
+        svg += '<text x="' + cx3.toFixed(3) + '" y="79.375" dominant-baseline="central"' +
+               ' font-family="Courier New, monospace" font-size="1.2" font-weight="bold"' +
+               ' fill="#9D7E61" text-anchor="middle">' + text3 + '</text>';
+      }
+    }
+    svg += '</svg>';
+    var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.download = 'besm6_punchcard.svg';
+    link.href = url;
+    link.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+  }
+
+  /* =====================================================================
+   *  Радикс
+   * ===================================================================== */
+  var RADIX_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function digitValue(ch) {
+    if (ch >= '0' && ch <= '9') return ch.charCodeAt(0) - 48;
+    if (ch >= 'a' && ch <= 'z') return ch.charCodeAt(0) - 97 + 10;
+    if (ch >= 'A' && ch <= 'Z') return ch.charCodeAt(0) - 65 + 10;
+    throw new Error('Символ «' + ch + '» не является цифрой числа.');
+  }
+  function convertRadix(input, src, dst) {
+    if (typeof input !== 'string' || input.trim() === '')
+      throw new Error('Введите число: строка не может быть пустой.');
+    if (!(src >= 2 && src <= 36)) throw new Error('Основание-источник должно быть от 2 до 36.');
+    if (!(dst >= 2 && dst <= 36)) throw new Error('Целевое основание должно быть от 2 до 36.');
+    var trimmed = input.trim(), steps = [];
+    var neg = trimmed.charAt(0) === '-', mag = neg ? trimmed.slice(1) : trimmed;
+    if (mag.length === 0) throw new Error('После знака «−» должна идти хотя бы одна цифра.');
+    if (neg) steps.push('Знак «−» запоминается отдельно.');
+    if (mag === '0') {
+      return { kind:'radix', steps:['Число равно 0.','Ноль одинаков в любой системе.'],
+        formula:'<b>0</b> <span class="op">→</span> 0',
+        resultText:'0', inputText:'«' + trimmed + '» (осн. ' + src + ')',
+        operation:'Системы счисления — ' + src + ' → ' + dst };
+    }
+    var v = 0n;
+    for (var i = 0; i < mag.length; i++) {
+      var s = mag.charAt(i), d = digitValue(s);
+      if (d >= src) throw new Error('Цифра «' + s + '» не существует в системе с основанием ' + src + '.');
+      var nx = v * BigInt(src) + BigInt(d);
+      steps.push('Разряд ' + i + ': ' + v + ' × ' + src + ' + ' + d + ' = ' + nx + '.');
+      v = nx;
+    }
+    var rem = v, digs = [];
+    while (rem > 0n) {
+      var q = rem / BigInt(dst), r = rem % BigInt(dst);
+      rem = q;
+      var od = RADIX_ALPHABET.charAt(Number(r));
+      digs.push(od);
+      steps.push('Деление на ' + dst + ': остаток ' + r + ' → «' + od + '».');
+    }
+    digs.reverse();
+    var out = (neg ? '−' : '') + digs.join('');
+    steps.push('Чтение остатков снизу вверх: ' + out + '.');
+    var formula =
+      'вход: <b>V</b> <span class="op">=</span> Σ d<span class="sub">i</span> · ' +
+      src + '<span class="sup">(n−1−i)</span><br>' +
+      'выход: повторное деление на ' + dst + '<br>' +
+      '<span class="op">→</span> <span class="num">' + out + '</span>';
+    return { kind:'radix', steps:steps, formula:formula,
+      resultText:out, inputText:'«' + trimmed + '» (осн. ' + src + ')',
+      operation:'Системы счисления — ' + src + ' → ' + dst };
+  }
+
+  /* =====================================================================
+   *  Единая точка входа
+   * ===================================================================== */
+  function runDecode() {
+    var tab = state.tab;
+    if (tab === 'besm6')     return decodeBesm6(state.values.besm6);
+    if (tab === 'ieee')      return decodeIeee(state.values.ieee, state.widths.ieee);
+    if (tab === 'integer')   return decodeInteger(state.values.integer, state.widths.integer, state.signed);
+    if (tab === 'command')   return decodeCommand(state.values.command, state.syntax);
+    if (tab === 'registers') return decodeRegisters();
+    if (tab === 'punchcard') return decodePunchcardReport();
+    if (tab === 'radix') {
+      return convertRadix($('#radixInput').value,
+        parseInt($('#radixFrom').value, 10), parseInt($('#radixTo').value, 10));
+    }
+    throw new Error('Неизвестная вкладка: ' + tab);
+  }
+
+  /* =====================================================================
+   *  Рендер битов (общий)
+   * ===================================================================== */
+  var bitGrid = $('#bitGrid');
+  var legendBox = $('#legend');
+  var bitsInfo = $('#bitsInfo');
+  var bitsNote = $('#bitsNote');
+
+  function cellSize(w) {
+    if (w <= 24) return 34;
+    if (w <= 32) return 27;
+    if (w <= 48) return 21;
+    return 17;
+  }
+  function renderBits() {
+    var tab = state.tab;
+    if (tab === 'radix' || tab === 'registers' || tab === 'punchcard') return;
+    var width = state.widths[tab];
+    var value = state.values[tab];
+    var fields = getFields(tab, width, value);
+    var size = cellSize(width);
+    bitGrid.style.gridTemplateColumns = 'repeat(' + width + ', ' + size + 'px)';
+    bitGrid.innerHTML = '';
+    fields.forEach(function (f) {
+      var label = document.createElement('div');
+      label.className = 'field-label k-' + f.kind;
+      label.style.gridRow = '1';
+      label.style.gridColumn = (width - f.msb) + ' / span ' + (f.msb - f.lsb + 1);
+      label.textContent = f.name;
+      label.dataset.field = f.name;
+      var dMsb = displayIndex(tab, f.msb);
+      var dLsb = displayIndex(tab, f.lsb);
+      label.title = f.name + ' · биты ' + dMsb + '…' + dLsb;
+      label.addEventListener('mouseenter', function () { highlightField(f.name); });
+      label.addEventListener('mouseleave', function () { highlightField(null); });
+      bitGrid.appendChild(label);
+    });
+    for (var i = width - 1; i >= 0; i--) {
+      var bit = getBit(value, i);
+      var field = findField(fields, i);
+      var shownIdx = displayIndex(tab, i);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bit-cell' + (bit === 1 ? ' on' : '') +
+        (field ? ' k-' + field.kind : ' k-value');
+      btn.style.gridRow = '2';
+      btn.style.gridColumn = String(width - i);
+      btn.dataset.index = String(i);
+      if (field) btn.dataset.field = field.name;
+      btn.title = (field ? field.name + ' · ' : '') + 'бит ' + shownIdx + ' = ' + bit;
+      var vv = document.createElement('span');
+      vv.className = 'v'; vv.textContent = String(bit);
+      var ii = document.createElement('span');
+      ii.className = 'i'; ii.textContent = String(shownIdx);
+      btn.appendChild(vv); btn.appendChild(ii);
+      bitGrid.appendChild(btn);
+    }
+    bitsInfo.textContent = width + ' бит · старший → младший · клик переключает';
+    bitsNote.textContent = bitNumberingNote(tab);
+    renderLegend(fields);
+  }
+  function renderLegend(fields) {
+    legendBox.innerHTML = '';
+    var seen = {};
+    fields.forEach(function (f) {
+      if (seen[f.kind]) return;
+      seen[f.kind] = true;
+      var item = document.createElement('span');
+      item.className = 'legend-item';
+      var sw = document.createElement('span');
+      sw.className = 'legend-swatch';
+      sw.style.background = 'var(--k-' + f.kind + '-bg)';
+      sw.style.borderColor = 'var(--k-' + f.kind + '-fg)';
+      var lb = document.createElement('span');
+      lb.textContent = KIND_LABELS[f.kind] || f.kind;
+      item.appendChild(sw); item.appendChild(lb);
+      legendBox.appendChild(item);
+    });
+  }
+  function highlightField(name) {
+    var nodes = bitGrid.querySelectorAll('.bit-cell, .field-label');
+    for (var i = 0; i < nodes.length; i++) {
+      if (name && nodes[i].dataset.field === name) nodes[i].classList.add('hl');
+      else nodes[i].classList.remove('hl');
+    }
+  }
+  bitGrid.addEventListener('mouseover', function (e) {
+    var el = e.target.closest('.bit-cell');
+    if (el) highlightField(el.dataset.field || null);
+  });
+  bitGrid.addEventListener('mouseleave', function () { highlightField(null); });
+  bitGrid.addEventListener('click', function (e) {
+    var btn = e.target.closest('.bit-cell');
+    if (!btn) return;
+    try {
+      var idx = Number(btn.dataset.index);
+      var tab = state.tab;
+      state.values[tab] ^= (1n << BigInt(idx));
+      state.values[tab] &= maskOf(state.widths[tab]);
+      logDebug('bit toggled', { tab:tab, index:idx, value:state.values[tab].toString() });
+      renderBits();
+      liveDecode();
+    } catch (err) { logError('Переключение бита', err); }
+  });
+
+  /* =====================================================================
+   *  Результат
+   * ===================================================================== */
+  var resultCard = $('#resultCard');
+  function line(key, value, big) {
+    return '<div class="result-line' + (big ? ' big' : '') + '">' +
+             '<span class="k">' + escapeHtml(key) + '</span>' +
+             '<span class="v">' + escapeHtml(value) + '</span>' +
+           '</div>';
+  }
+  function renderResult(result) {
+    if (result.kind === 'registers') { renderRegistersPanel(); return; }
+    if (result.kind === 'punchcard') return;
+    var html = '';
+    if (result.kind === 'besm6') {
+      html += line('Значение', result.resultText, true);
+      html += line('Смещённый порядок P', String(result.rawExponent));
+      html += line('Истинный порядок', String(result.exponent));
+      html += line('Мантисса (41 бит)', result.mantissa.toString());
+    } else if (result.kind === 'ieee') {
+      html += line('Значение', result.resultText, true);
+      html += line('Класс', result.classText);
+      html += line('Сырой порядок E', String(result.rawExponent));
+      html += line('Дробная часть F', result.fraction.toString());
+    } else if (result.kind === 'integer') {
+      html += line('Значение', result.resultText, true);
+      html += line('Режим', state.signed ? 'Знаковый (доп. код)' : 'Беззнаковый');
+    } else if (result.kind === 'command') {
+      html += '<div class="result-line big"><span class="k">Инструкция (' +
+        SYNTAX_LABEL[result.syntax] + ')</span>' +
+        '<span class="v">' + escapeHtml(result.displayText) + '</span></div>';
+      html += line('Индекс-регистр', 'M' + result.register);
+      html += line('Формат', result.isLong ? 'Длинная (Format 2, 15-бит адрес)'
+                                            : 'Короткая (Format 1, 12-бит адрес)');
+      html += line('Код операции', toOctal(result.opcode, result.isLong ? 3 : 2) + '₈' +
+        (result.isExtracode ? ' (экстракод)' : ' · ' + (result.mnemonic || '—')));
+      html += line('Адрес', toOctal(result.address, 5) + '₈ = ' + result.address + '₁₀');
+      html += line('Описание', result.description);
+    } else if (result.kind === 'radix') {
+      html += line('Результат', result.resultText, true);
+      html += line('Основание', $('#radixFrom').value + ' → ' + $('#radixTo').value);
+    }
+    if (result.formula) {
+      html += '<div class="formula-block">' +
+                '<div class="formula-label">Формула преобразования</div>' +
+                '<div class="formula">' + result.formula + '</div>' +
+              '</div>';
+    }
+    resultCard.innerHTML = html;
+  }
+  function renderResultError(msg) {
+    resultCard.innerHTML = '<div class="result-error">' + escapeHtml(msg) + '</div>';
+  }
+
+  /* Регистры: клики по битам */
+  resultCard.addEventListener('click', function (e) {
+    var btn = e.target.closest('.reg-bit');
+    if (!btn || btn.disabled) return;
+    try {
+      var regName = btn.dataset.reg;
+      var bitIdx = Number(btn.dataset.bit);
+      var width = regWidth(regName);
+      var val = getRegValue(regName);
+      val ^= (1n << BigInt(bitIdx));
+      setRegValue(regName, val, width);
+      var isOn = getBit(val, bitIdx) === 1;
+      btn.classList.toggle('on', isOn);
+      btn.textContent = isOn ? '1' : '0';
+      var lineEl = btn.closest('.reg-line');
+      if (lineEl) {
+        var valueEl = lineEl.querySelector('.reg-value');
+        if (valueEl) valueEl.innerHTML = renderRegValue(regName, val, width);
+      }
+      if (regName === 'R') {
+        var rDecodeEl = document.getElementById('R-decode');
+        if (rDecodeEl) rDecodeEl.innerHTML = renderRDecoding(val);
+      }
+      logDebug('reg bit', { reg:regName, bit:bitIdx });
+    } catch (err) { logError('Переключение бита регистра', err); }
+  });
+
+  /* =====================================================================
+   *  Журнал
+   * ===================================================================== */
+  var journalBox = $('#journal');
+  function appendReport(report) {
+    state.reports.push(report);
+    var entry = document.createElement('article');
+    entry.className = 'journal-entry' + (report.isError ? ' error' : '');
+    var time = new Date().toLocaleTimeString('ru-RU');
+    var stepsHtml = report.steps.map(function (s) { return '<li>' + escapeHtml(s) + '</li>'; }).join('');
+    entry.innerHTML =
+      '<header><span class="j-time">' + escapeHtml(time) + '</span>' +
+      '<span class="j-op">' + escapeHtml(report.operation) + '</span></header>' +
+      '<div class="j-input">Вход: <code>' + escapeHtml(report.inputText) + '</code></div>' +
+      '<ol class="j-steps">' + stepsHtml + '</ol>' +
+      '<div class="j-result">Результат: <strong>' + escapeHtml(report.resultText) + '</strong></div>';
+    journalBox.appendChild(entry);
+    journalBox.scrollTop = journalBox.scrollHeight;
+    console.info('[BitVisualizer] ' + report.operation + ' → ' + report.resultText);
+  }
+  function appendErrorReport(where, error) {
+    var msg = error && error.message ? error.message : String(error);
+    appendReport({ operation:'Ошибка — ' + where, inputText:'—', resultText:msg,
+      steps:['Проверьте введённые данные.','Подробности записаны в консоль браузера.'],
+      isError:true });
+  }
+
+  /* =====================================================================
+   *  Live decode
+   * ===================================================================== */
+  function liveDecode() {
+    try { var r = runDecode(); renderResult(r); return r; }
+    catch (err) { logError('Живое декодирование', err);
+      renderResultError(err.message || String(err)); return null; }
+  }
+  function commitDecode() {
+    try { var r = runDecode(); renderResult(r); appendReport(r); }
+    catch (err) {
+      logError('Декодирование', err, { tab: state.tab });
+      renderResultError(err.message || String(err));
+      appendErrorReport('вкладка «' + state.tab + '»', err);
+    }
+  }
+
+  /* =====================================================================
+   *  Вкладки
+   * ===================================================================== */
+  var tabsBar = $('#tabs');
+  var bitsPanel = $('#bitsPanel');
+  var actionsRow = $('#actionsRow');
+  var decodeBtn = $('#decodeBtn');
+  var decodeHint = $('#decodeHint');
+
+  function setTab(tab) {
+    state.tab = tab;
+    var btns = tabsBar.querySelectorAll('.tab');
+    for (var i = 0; i < btns.length; i++)
+      btns[i].classList.toggle('active', btns[i].dataset.tab === tab);
+    var groups = document.querySelectorAll('.control-group[data-tab]');
+    for (var j = 0; j < groups.length; j++)
+      groups[j].classList.toggle('hidden', groups[j].dataset.tab !== tab);
+    bitsPanel.classList.toggle('hidden',
+      tab === 'radix' || tab === 'registers' || tab === 'punchcard');
+
+    if (tab === 'radix') {
+      resultCard.innerHTML = '<div class="result-empty">Введите число и основания.</div>';
+      decodeBtn.textContent = 'Декодировать';
+      decodeHint.textContent = 'Результат обновляется автоматически.';
+    } else if (tab === 'registers') {
+      renderRegistersPanel();
+      decodeBtn.textContent = 'В журнал';
+      decodeHint.textContent = 'Клик по биту переключает его; значение обновляется сразу.';
+    } else if (tab === 'punchcard') {
+      renderPunchcardView();
+      decodeBtn.textContent = 'В журнал';
+      decodeHint.textContent = 'Клик по клетке пробивает отверстие. Текст ↔ отверстия синхронизируются.';
+    } else {
+      renderBits();
+      liveDecode();
+      decodeBtn.textContent = 'Декодировать';
+      decodeHint.textContent = 'Результат обновляется автоматически при переключении битов.';
+    }
+    logDebug('tab switched', tab);
+  }
+  tabsBar.addEventListener('click', function (e) {
+    var b = e.target.closest('.tab'); if (!b) return;
+    setTab(b.dataset.tab);
+  });
+
+  /* =====================================================================
+   *  Обработчики
+   * ===================================================================== */
+  $('#clearBits').addEventListener('click', function () {
+    if (state.tab === 'radix' || state.tab === 'registers' || state.tab === 'punchcard') return;
+    state.values[state.tab] = 0n; renderBits(); liveDecode();
+  });
+  $('#invertBits').addEventListener('click', function () {
+    if (state.tab === 'radix' || state.tab === 'registers' || state.tab === 'punchcard') return;
+    var w = state.widths[state.tab];
+    state.values[state.tab] = (~state.values[state.tab]) & maskOf(w);
+    renderBits(); liveDecode();
+  });
+  decodeBtn.addEventListener('click', commitDecode);
+
+  $('#ieeeFormat').addEventListener('change', function (e) {
+    state.widths.ieee = parseInt(e.target.value, 10);
+    state.values.ieee = 0n; renderBits(); liveDecode();
+  });
+  $('#intWidth').addEventListener('change', function (e) {
+    state.widths.integer = parseInt(e.target.value, 10);
+    state.values.integer = 0n; renderBits(); liveDecode();
+  });
+  var signRadios = document.querySelectorAll('input[name="intSign"]');
+  for (var sr = 0; sr < signRadios.length; sr++) {
+    signRadios[sr].addEventListener('change', function (e) {
+      state.signed = e.target.value === 'signed'; renderBits(); liveDecode();
+    });
+  }
+  $('#cmdSyntax').addEventListener('change', function (e) {
+    state.syntax = e.target.value;
+    logDebug('syntax switched', state.syntax);
+    if (state.tab === 'command') liveDecode();
+  });
+  var regFormatRadios = document.querySelectorAll('input[name="regFormat"]');
+  for (var rf = 0; rf < regFormatRadios.length; rf++) {
+    regFormatRadios[rf].addEventListener('change', function (e) {
+      state.regFormat = parseInt(e.target.value, 10);
+      logDebug('register format switched', state.regFormat);
+      if (state.tab === 'registers') renderRegistersPanel();
+    });
+  }
+  $('#clearRegs').addEventListener('click', function () {
+    state.registers.A = 0n; state.registers.Y = 0n; state.registers.R = 0n;
+    state.registers.C = 0n; state.registers.K = 0n;
+    for (var i = 0; i < 16; i++) state.registers.M[i] = 0n;
+    if (state.tab === 'registers') renderRegistersPanel();
+    logDebug('registers cleared');
+  });
+
+  $('#pcText').addEventListener('input', function () {
+    if (state.tab === 'punchcard') generatePunchFromText();
+  });
+  $('#pcFormat').addEventListener('change', function () {
+    if (state.tab === 'punchcard') generatePunchFromText();
+  });
+  $('#pcZoom').addEventListener('change', function () {
+    if (state.tab === 'punchcard') updatePunchZoom();
+  });
+  $('#pcClear').addEventListener('click', function () {
+    if (state.tab !== 'punchcard') return;
+    punchHoles = [];
+    for (var i = 0; i < PC_ROWS; i++) punchHoles.push(new Array(PC_COLS).fill(false));
+    $('#pcText').value = '';
+    renderPunchHoles();
+  });
+  $('#pcExportPng').addEventListener('click', function () {
+    if (state.tab === 'punchcard') exportPunchPNG();
+  });
+  $('#pcExportSvg').addEventListener('click', function () {
+    if (state.tab === 'punchcard') exportPunchSVG();
+  });
+
+  $('#radixInput').addEventListener('input', function () {
+    if (state.tab === 'radix') liveDecode();
+  });
+  $('#radixFrom').addEventListener('change', function () { if (state.tab === 'radix') liveDecode(); });
+  $('#radixTo').addEventListener('change', function () { if (state.tab === 'radix') liveDecode(); });
+
+  $('#copyJournal').addEventListener('click', function () {
+    try {
+      if (state.reports.length === 0) return;
+      var text = state.reports.map(function (rep) {
+        return rep.operation + '\nВход: ' + rep.inputText + '\n' +
+          rep.steps.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n') +
+          '\nРезультат: ' + rep.resultText;
+      }).join('\n\n' + '-'.repeat(60) + '\n\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function (err) { logError('Копирование', err); });
+      } else {
+        console.warn('[BitVisualizer] Clipboard API недоступен, вывод в консоль.');
+        console.log(text);
+      }
+    } catch (err) { logError('Копирование журнала', err); }
+  });
+  $('#clearJournal').addEventListener('click', function () {
+    state.reports = []; journalBox.innerHTML = '';
+  });
+
+  /* =====================================================================
+   *  Тема
+   * ===================================================================== */
+  var themeToggle = $('#themeToggle');
+  function applyTheme(theme) {
+    state.theme = theme;
+    document.documentElement.dataset.theme = theme;
+    themeToggle.textContent = theme === 'dark' ? '☀ Светлая' : '🌙 Тёмная';
+    try { localStorage.setItem('besm6-theme', theme); }
+    catch (err) { logError('Сохранение темы', err); }
+  }
+  themeToggle.addEventListener('click', function () {
+    applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+  });
+  function initTheme() {
+    var stored = null;
+    try { stored = localStorage.getItem('besm6-theme'); } catch (e) { logError('Чтение темы', e); }
+    if (stored === 'dark' || stored === 'light') { applyTheme(stored); return; }
+    var pd = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(pd ? 'dark' : 'light');
+  }
+
+  /* =====================================================================
+   *  Инициализация
+   * ===================================================================== */
+  function init() {
+    initTheme();
+    state.values.command = (2n << 20n) | (0x04n << 12n) | 0o100n;
+    state.values.besm6 = (65n << 41n) | (1n << 39n);
+    state.registers.A = (65n << 41n) | (1n << 39n);
+    state.registers.R = 0x03n;
+    state.registers.K = 0o1000n;
+    state.registers.M[1] = 0o100n;
+    state.registers.M[15] = 0o7777n;
+    setTab('besm6');
+    console.info('[BitVisualizer] Готово. Исправлен баг фона перфокарты.');
+  }
+  document.addEventListener('DOMContentLoaded', init);
+  if (document.readyState !== 'loading') init();
+
+})();
+</script>
+</body>
+</html>
